@@ -1,0 +1,180 @@
+---
+title: "Trabalho1"
+author: "Pedro Portela"
+date: "10 de abril de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Trabalho 1 - Tópicos Especiais em Pesquisa Operacional
+
+A base dados escolhida para o trabalho foi de voos registrados pela Agência Nacional de Aviação Civil (ANAC) no Brasil, entre Janeiro de 2015 e Agosto de 2017. O foco será no aeroporto Hercílio Luz, de Florianópolis. 
+
+Dados disponíveis em: https://www.kaggle.com/ramirobentes/flights-in-brazil 
+
+###Libraries e dados
+
+```{r Libraries and Data, echo=FALSE, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(readr)
+library(RColorBrewer)
+library(googleVis)
+library(ggmap)
+
+flnFlightsOut <- read_csv("docs/flnFlightsOut.csv")
+#summary(flnFlightsOut)
+
+flnFlightsIn<- read_csv("docs/flnFlightsIn.csv")
+#summary(flnFlightsIn)
+
+```
+
+###Visualização inicial
+
+```{r Data peek}
+
+# Voos com origem em Florianopolis
+top_n(flnFlightsOut, n=5)
+# Voos com destino em Florianopolis
+top_n(flnFlightsIn, n=5)
+
+```
+
+### Exploração de dados
+
+```{r Comp Aereas, echo=FALSE, fig.align='center', fig.width=15, fig.height=10}
+#Análise de companhias aéreas - chegadas
+flnCompIn <- count(flnFlightsIn, Companhia.Aerea) 
+flnCompIn[[1]][2] <- "AUSTRAL" 
+
+ggplot(flnCompIn, aes(x=Companhia.Aerea, y=n, fill=Companhia.Aerea)) + 
+  geom_col() + 
+  labs(title = "\nCompanhias aéreas operando em Florianópolis", subtitle='Aeroporto Hercílio Luz (Jan/15 até Ago/17)', 
+       y = "Número de voos", x = "", fill = "Companhia Aérea") +
+  scale_fill_brewer(palette = 'Pastel2') + coord_flip() + theme_minimal()
+
+```
+
+Destaque para a Gol, com um volume de voos consideravelmente maior que as outras companhias (no período). 
+
+```{r Aeroportos, echo=FALSE, fig.align='center', fig.height=10, fig.width=15}
+
+flnFlightsIn$Aeroporto.Origem <- gsub("Guarulhos - Governador Andre Franco Montoro", "Guarulhos", flnFlightsIn$Aeroporto.Origem)
+flnFlightsOut$Aeroporto.Destino <- gsub("Guarulhos - Governador Andre Franco Montoro", "Guarulhos", flnFlightsOut$Aeroporto.Destino)
+flnFlightsIn$Aeroporto.Origem <- gsub("Aeroporto Internacional Do Rio De Janeiro/Galeao", "Galeão", flnFlightsIn$Aeroporto.Origem)
+flnFlightsOut$Aeroporto.Destino <- gsub("Aeroporto Internacional Do Rio De Janeiro/Galeao", "Galeão", flnFlightsOut$Aeroporto.Destino)
+
+#Análise por aeroporto de origem
+ggplot(flnFlightsIn, aes(x = Aeroporto.Origem)) + 
+  geom_bar(aes(fill=flnFlightsIn$Companhia.Aerea), position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(title='Origem dos voos', subtitle= 'Aeroporto Hercílio Luz (Jan/15 até Ago/17)',
+       x='Aeroporto', y='Número de voos', fill='Companhia Aerea') +
+  scale_fill_brewer(palette = 'Pastel2', 
+                    labels=c('AEROLINEAS ARGENTINAS', 'AUSTRAL', 'AVIANCA', 'AZUL', 'GOL', 'TAM', 'TOTAL'))  
+
+#Análise por aeroporto de destino
+flnCompOut <- count(flnFlightsOut, Companhia.Aerea)
+flnCompIn[[1]][2] <- "AUSTRAL"
+ggplot(flnFlightsOut, aes(x = Aeroporto.Destino)) + 
+  geom_bar(aes(fill=flnFlightsOut$Companhia.Aerea), position = position_stack(reverse = TRUE)) +
+  coord_flip() +
+  labs(title='Destino dos voos', subtitle= 'Aeroporto Hercílio Luz (Jan/15 até Ago/17)', 
+       x='Aeroporto', y='Número de voos', fill='Companhia Aerea') +
+  scale_fill_brewer(palette = 'Pastel2', 
+                    labels=c('AEROLINEAS ARGENTINAS', 'AUSTRAL', 'AVIANCA', 'AZUL', 'GOL', 'TAM', 'TOTAL'))
+
+```
+
+Poucas diferenças entre as origens e destinos. Notavelmente, rota da TAM com origem no Aeroporto Santos Dummont (RJ) não tem voo de retorno.   
+
+##Análise de atrasos
+
+Considerando atrasos de até 4 horas. Atrasos maiores são [categorizados diferentemente pela ANAC](http://www.anac.gov.br/assuntos/passageiros/atrasos-cancelamentos-pretericao-e-assistencia-material), surgindo a obrigação por parte da companhia aérea de fornecer reacomodação, reembolso integral e execução do serviço por outra modalidade de transporte, cabendo a escolha ao passageiro pelo cancelamento ou preterição de embarque. 
+
+###Visualização inicial - Atrasos
+
+```{r Separação e Visualização}
+#Maiores atrasos nos voos saíndo de Florianópolis
+arrangedDelays <- select(arrange(flnFlightsOut, desc(Atrasos)), Atrasos, Companhia.Aerea, Codigo.Justificativa, Partida.Prevista, everything())
+head(arrangedDelays)
+
+#Separando voos com atraso
+delayedFlights <- filter(flnFlightsOut, Atrasos > 0 & Atrasos < 240)
+
+```
+
+  Pela tabela ordenada por maiores atrasos, surge uma dúvida quanto à coleta dos dados: em alguns casos, a justificativa para o atraso é registrada como "Antecipação de horário autorizada", mesmo que o voo tenha partido com um atraso bastante alto - em alguns casos, como mostrado, dias de atraso. 
+  Reforça-se, portanto, a análise de apenas atrasos "normais" (no máximo 4 horas), já que minimiza a utilização de dados conflitantes. 
+
+```{r Boxplot Atrasos, echo=FALSE, fig.align='center', fig.height=10, fig.width=15}
+
+#Boxplot separado por companhia aerea - Voos Nacionais, Internacionais e Regionais
+ggplot(data = delayedFlights, aes(x=Codigo.Tipo.Linha, y=Atrasos, color=Companhia.Aerea)) +
+  geom_boxplot(outlier.alpha = 0.2) +
+  labs(title = "\n Atrasos - Aeroporto Hercílio Luz", subtitle="Voos nacionais",
+       y = "Atraso [min]", x = "Data", color = "Companhia Aérea") +
+  scale_color_brewer(palette='Dark2')
+
+```
+
+Interessante notar que voos nacionais com mais de ~75 minutos de atraso são considerados *outliers* neste agrupamento de dados. Destaque para a empresa TOTAL, com quartis próximos e menor número de atrasos acima de uma hora.
+
+###Exploração adicional de atrasos - Gráficos de densidade
+
+```{r Análise de atrasos - densidade, echo=FALSE, fig.align='center', fig.width=15, fig.height=10}
+
+#Densidade - Atrasos de voos nacionais
+delayedFlightsNat <- filter(flnFlightsOut, Atrasos > 0 & Atrasos < 240 & Codigo.Tipo.Linha == 'Nacional')
+ggplot(delayedFlightsNat, aes(Atrasos)) +
+  geom_density(aes(fill=delayedFlightsNat$Companhia.Aerea), alpha=0.6) +
+  labs(title = "\n Densidade de atrasos - Voos nacionais", 
+       x = "Atraso [min]", y = "Density", fill = "Companhia Aérea") +
+  scale_fill_brewer(palette = 'Pastel2') + theme_minimal()
+
+#Densidade - Atrasos de voos internacionais
+delayedFlightsInt <- filter(flnFlightsOut, Atrasos > 0 & Atrasos < 240 & Codigo.Tipo.Linha == 'Internacional')
+ggplot(delayedFlightsInt, aes(Atrasos)) +
+  geom_density(aes(fill=delayedFlightsInt$Companhia.Aerea), alpha=0.6) +
+  labs(title = "\n Densidade de atrasos - Voos internacionais", 
+       x = "Atraso [min]", y = "Density", fill = "Companhia Aérea") +
+  scale_fill_brewer(palette = 'Pastel2') + theme_minimal()
+
+```
+
+Para os voos nacionais, a maioria dos atrasos concentram-se em valores menores que uma hora. Nos voos internacionais, interessante notar a diferença entre as duas companhias - grande maioria dos atrasos da GOL estão em uma faixa de valores baixos, enquanto 
+
+```{r Análise de atrasos - scatter plot , fig.align='center', fig.width=15, fig.height=10}
+
+#Contabilizados apenas atrasos entre 30 minutos e 4 horas (ANAC)
+ggplot(data = filter(delayedFlights, Atrasos > 30)) + 
+  geom_point(aes(x=Partida.Prevista, y=Atrasos, color=Companhia.Aerea)) + 
+  geom_smooth(aes(x=Partida.Prevista, y=Atrasos), color='gray45', alpha=0.3) + 
+  labs(title = "\n Atrasos - Aeroporto Hercílio Luz", y = "Atraso [min]", x = "Data", color = "Companhia Aérea") +
+  scale_fill_brewer(palette = 'Spectral')
+
+```
+
+Foram contabilizados atrasos de mais de 30 minutos pois, de acordo com as regras da ANAC, é a partir desse tempo que a empresa deve informar os passageiros sobre a situação do voo. 
+Percebe-se uma certa sazonalidade nos atrasos, mas sem nenhuma tendência muito clara.
+
+##Mapeamento de voos 
+
+Voos com conexões em outras cidades de Santa Catarina são considerados Regionais, mesmo que o destino final seja em outro Estado. 
+
+```{r Mapeamento de voos, echo=FALSE, fig.align='center', fig.height=8, fig.width=15, warning=FALSE}
+
+#Mapeamento dos voos
+possibleFlightsIn <- distinct(flnFlightsIn, Aeroporto.Origem, LongOrig, LatOrig, Aeroporto.Destino, LongDest, LatDest, Codigo.Tipo.Linha)
+map <- get_map('florianopolis', zoom=5)
+ggmap(map) + 
+  geom_segment(data = possibleFlightsIn, aes(x=LongOrig, y=LatOrig, xend=LongDest, yend=LatDest, color=Codigo.Tipo.Linha), size=1, alpha=.5, lineend='square') +
+  labs(title = "\n Mapa de voos - Aeroporto Hercílio Luz", x="Longitude", y="Latitude", color='Tipo de Linha')
+
+```
+
+O código desenvolvido neste trabalho pode ser facilmente adaptado para a análise de outros aeroportos brasileiros. Para isso, seria necessário a recuperação dos dados originais disponíveis em: https://www.kaggle.com/ramirobentes/flights-in-brazil

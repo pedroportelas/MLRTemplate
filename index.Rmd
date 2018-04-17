@@ -17,5 +17,4 @@ Markdown is an authoring format that enables easy creation of dynamic documents,
 R Markdown documents are fully reproducible (they can be automatically regenerated whenever underlying R code or data changes).
 
 
-
 ![](images/RMarkdownOutputFormats.png)
