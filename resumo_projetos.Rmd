@@ -21,14 +21,14 @@ Essa página apresenta um resumo dos projetos realizado na disciplina **"Anális
 ## Projeto 1
 
 * Título: Análise Exploratória de Dados
-* Data:
+* Data: 17/04/2016
 
 ### Descrição
-Esse projeto tem como objetivo realizar uma análise exploratória no dados do .....
+Esse projeto tem como objetivo realizar uma análise exploratória nos dados de voos do aeroporto Hercílio Luz de Florianópolis, no período entre Janeiro de 2015 e Agosto de 2017.
 
 ### Relatório do Projeto
 
-Link no [meu Github](<https://github.com/Efsilvaa>) *Pages*: [Projeto 1](projetos/projeto1.html)
+Link no [meu Github](<https://github.com/pedroportelas>) *Pages*: [Projeto 1](projetos/teste1.html)
 
 ***
 
